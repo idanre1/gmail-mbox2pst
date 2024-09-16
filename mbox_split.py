@@ -6,7 +6,7 @@
 import sys
 import getopt
 import mailbox
-from email.header import Header, decode_header, make_header
+from email.header import decode_header, make_header
 
 def main(argv):
 	in_mbox = "source.mbox"
@@ -37,7 +37,6 @@ def main(argv):
 	}
 
 	sourcembox = mailbox.mbox(in_mbox, create=False)
-	# print(str(sourcembox.__len__()) + " messages to process")
 	sys.stdout.flush()
 
 	mcount = mjunk = mchat = msaved = 0
@@ -133,15 +132,28 @@ def main(argv):
 			print("Error decoding From: " + message["From"])
 			mfrom = "Unknown"
 		mid = message["Message-Id"] or "<N/A>"
-		print("Storing " + mid + " from \"" + mfrom + "\" to mbox \"" + tbox + "\"")
+		# print("Storing " + mid + " from \"" + mfrom + "\" to mbox \"" + tbox + "\"")
 		msaved += 1
 
 		if tbox not in boxes:
 			boxes[tbox] = mailbox.mbox(prefix + tbox, create=True)
-		boxes[tbox].add(message)
+		# https://stackoverflow.com/questions/409217/python-mailbox-encoding-errors
+		try:
+			boxes[tbox].add(message)
+		except UnicodeEncodeError:
+			import chardet
+			print("Error adding message to mbox: " + tbox)
+			print("Message: " + message)
+			print("From: " + mfrom)
+			print("Message ID: " + mid)
+			print("Fallback to ascii(ignore) encoding")
+			msg=str(msg, chardet.detect(message)['encoding']).encode('ascii', 'ignore')
+			boxes[tbox].add(msg)
+
 
 	print(str(mcount) + " messages processed, " + str(msaved) + " messages saved")
 	print("ignored: " + str(mjunk) + " spam, " + str(mchat) + " mchat")
+	print("File originally contained " + str(sourcembox.__len__()) + " messages to process")
 
 if __name__ == "__main__":
     main(sys.argv[1:])
