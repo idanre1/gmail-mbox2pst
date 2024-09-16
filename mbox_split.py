@@ -44,12 +44,20 @@ def main(argv):
 
 	def decode(s):
 		# https://stackoverflow.com/questions/7331351/python-email-header-decoding-utf-8
+		# https://www.base64decode.org/
 		try:
 			result = str(make_header(decode_header(s)))
 		except:
 			print("Error decoding header: " + s)
-			print("Decode: " + str(decode_header(s)))
-			raise
+			dh=decode_header(s)
+			print("Decode: " + str(dh))
+			l=[]
+			for hdr,enc in dh:
+				if (enc == 'iso-8859-8-i'):
+					enc='iso-8859-8'
+				l.append((hdr,enc))
+			h=make_header(l)
+			print("Make header:" + str(h))
 		return result
 
 	print("Looping:")
@@ -61,7 +69,7 @@ def main(argv):
 		tbox = "Archive"				# default target box: Archive
 
 		if gmail_labels:
-			gmail_labels = [decode(s) for s in gmail_labels]
+			gmail_labels = decode(gmail_labels)
 			gmail_labels = gmail_labels.split(',')	# from here we only work on an array to avoid partial matches
 			# handle flags
 			if "Unread" in gmail_labels:
@@ -119,7 +127,11 @@ def main(argv):
 		if flagged:
 			message["X-Status"] = "F"
 
-		mfrom = decode(message["From"]) or "Unknown"
+		try:
+			mfrom = decode(message["From"]) or "Unknown"
+		except:
+			print("Error decoding From: " + message["From"])
+			mfrom = "Unknown"
 		mid = message["Message-Id"] or "<N/A>"
 		print("Storing " + mid + " from \"" + mfrom + "\" to mbox \"" + tbox + "\"")
 		msaved += 1
