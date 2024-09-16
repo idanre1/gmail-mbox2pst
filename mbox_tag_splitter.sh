@@ -6,7 +6,7 @@ script_path=`readlink -f "${BASH_SOURCE:-$0}"`
 script_path=`dirname $script_path`
 
 # Create maildir path
-cd ~/Maildir
+cd ~/mail
 # Split mbox by folders
 python $script_path/mbox_split.py --infile $filename --prefix=""
 # Convert mbox to maildir
