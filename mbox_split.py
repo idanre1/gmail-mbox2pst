@@ -6,6 +6,7 @@
 import sys
 import getopt
 import mailbox
+from email.header import Header, decode_header, make_header
 
 def main(argv):
 	in_mbox = "source.mbox"
@@ -29,14 +30,29 @@ def main(argv):
 	boxes = {
 		"Inbox":	mailbox.mbox(prefix + "INBOX", create=True),
 		"Sent":		mailbox.mbox(prefix + "Sent", create=True),
-		"Archive":	mailbox.mbox(prefix + "Archive", create=True)
+		"Archive":	mailbox.mbox(prefix + "Archive", create=True),
+		"Spam":	mailbox.mbox(prefix + "Spam", create=True),
+		"Chat":	mailbox.mbox(prefix + "Chat", create=True),
+		"Trash":	mailbox.mbox(prefix + "Trash", create=True),
 	}
 
 	sourcembox = mailbox.mbox(in_mbox, create=False)
-	print(str(sourcembox.__len__()) + " messages to process")
+	# print(str(sourcembox.__len__()) + " messages to process")
 	sys.stdout.flush()
 
 	mcount = mjunk = mchat = msaved = 0
+
+	def decode(s):
+		# https://stackoverflow.com/questions/7331351/python-email-header-decoding-utf-8
+		try:
+			result = str(make_header(decode_header(s)))
+		except:
+			print("Error decoding header: " + s)
+			print("Decode: " + str(decode_header(s)))
+			raise
+		return result
+
+	print("Looping:")
 	for message in sourcembox:
 		read = True
 		flagged = False
@@ -45,28 +61,43 @@ def main(argv):
 		tbox = "Archive"				# default target box: Archive
 
 		if gmail_labels:
+			gmail_labels = [decode(s) for s in gmail_labels]
 			gmail_labels = gmail_labels.split(',')	# from here we only work on an array to avoid partial matches
 			# handle flags
 			if "Unread" in gmail_labels:
 				read = False
+			if "לא נקרא" in gmail_labels:
+				read = False
+			if "נפתח" in gmail_labels:
+				read = True
 			if "Starred" in gmail_labels:
 				flagged = True
 
 			# order matters!
-			if "Spam" in gmail_labels:		# skip all spam
+			if "Spam" in gmail_labels:
 				mjunk += 1
-				continue
-			elif "Chat" in gmail_labels:		# skip all chat
+				tbox = "Spam"
+			elif "Chat" in gmail_labels:
 				mchat += 1
-				continue
+				tbox = "Chat"
+			elif "Trash" in gmail_labels:
+				tbox = "Trash"
+			elif "אשפה" in gmail_labels:
+				tbox = "Trash"
 			elif "Sent" in gmail_labels:		# anything that has Sent goes to Sent box
 				tbox = "Sent"
+			elif "דואר יוצא" in gmail_labels:	# anything that has Sent goes to Sent box
+				tbox = "Sent"
 			elif "Inbox" in gmail_labels:		# Inbox treated here because some messages can be Sent,Inbox
+				tbox = "Inbox"
+			elif "תיבת דואר נכנס" in gmail_labels:		# Inbox treated here because some messages can be Sent,Inbox
 				tbox = "Inbox"
 			else:
 				for label in gmail_labels:
 					# ignore meta labels
-					if label == "Important" or label == "Unread" or label == "Starred" or label == "Newsletters":
+					if label in ["Important","Unread","Starred","Newsletters"]:
+						continue
+					if label in ["חשוב","לא נקרא","נפתח","קטגוריה – אישי", "קטגוריה – עדכונים", "קטגוריה – קידומי מכירות","קטגוריה – רשתות חברתיות"]:
 						continue
 
 					# use first match
@@ -74,6 +105,8 @@ def main(argv):
 
 					# handle odd labels
 					if label == "[Imap]/Archive":
+						tbox = "Archive"
+					elif label == "מאוחסן בארכיון":
 						tbox = "Archive"
 					break
 				# if nothing matched we'll use default set at message loop start
@@ -86,7 +119,7 @@ def main(argv):
 		if flagged:
 			message["X-Status"] = "F"
 
-		mfrom = message["From"] or "Unknown"
+		mfrom = decode(message["From"]) or "Unknown"
 		mid = message["Message-Id"] or "<N/A>"
 		print("Storing " + mid + " from \"" + mfrom + "\" to mbox \"" + tbox + "\"")
 		msaved += 1
