@@ -47,16 +47,16 @@ def main(argv):
 		try:
 			result = str(make_header(decode_header(s)))
 		except:
-			print("Error decoding header: " + s)
+			# print("Error decoding header: " + s)
 			dh=decode_header(s)
-			print("Decode: " + str(dh))
+			# print("Decode: " + str(dh))
 			l=[]
 			for hdr,enc in dh:
 				if (enc == 'iso-8859-8-i'):
 					enc='iso-8859-8'
 				l.append((hdr,enc))
 			h=make_header(l)
-			print("Make header:" + str(h))
+			# print("Make header:" + str(h))
 		return result
 
 	print("Looping:")
@@ -99,12 +99,14 @@ def main(argv):
 				tbox = "Inbox"
 			elif "תיבת דואר נכנס" in gmail_labels:		# Inbox treated here because some messages can be Sent,Inbox
 				tbox = "Inbox"
+			elif "קטגוריה – אישי" in gmail_labels:		# Inbox treated here because some messages can be Sent,Inbox
+				tbox = "Inbox"
 			else:
 				for label in gmail_labels:
 					# ignore meta labels
 					if label in ["Important","Unread","Starred","Newsletters"]:
 						continue
-					if label in ["חשוב","לא נקרא","נפתח","קטגוריה – אישי", "קטגוריה – עדכונים", "קטגוריה – קידומי מכירות","קטגוריה – רשתות חברתיות"]:
+					if label in ["חשוב","לא נקרא","נפתח","קטגוריה – עדכונים", "קטגוריה – קידומי מכירות","קטגוריה – רשתות חברתיות"]:
 						continue
 
 					# use first match
@@ -141,19 +143,75 @@ def main(argv):
 		try:
 			boxes[tbox].add(message)
 		except UnicodeEncodeError:
-			import chardet
 			print("Error adding message to mbox: " + tbox)
-			print("Message: " + message)
+			print(f"Message: {message}")
 			print("From: " + mfrom)
 			print("Message ID: " + mid)
-			print("Fallback to ascii(ignore) encoding")
-			msg=str(msg, chardet.detect(message)['encoding']).encode('ascii', 'ignore')
-			boxes[tbox].add(msg)
 
+			email_messages = get_email_list(message)
+			for i, msg in enumerate(email_messages):
+				content_type = 'NA' if isinstance(msg, str) else msg.get_content_type()
+				encoding = 'NA' if isinstance(msg, str) else msg.get('Content-Transfer-Encoding', 'NA')
+				print(f'{i} - {content_type} - {encoding}')
+				if 'text/plain' in content_type and 'base64' not in encoding:
+					try:
+						hdr=decode_header(msg['Subject'])
+						enc=hdr[0][1]
+						msg.set_charset(enc)
+					except:
+						print('Error transfering header')
+				elif 'multipart/alternative' in content_type and 'base64' not in encoding:
+					try:
+						hdr=decode_header(msg['Subject'])
+						enc=hdr[0][1]
+						msg.set_charset(enc)
+					except:
+						print('Error transfering header')
+				try:
+					boxes[tbox].add(msg)
+				except:
+					print('Error adding message')
+					print(f"Message: {msg}")
 
 	print(str(mcount) + " messages processed, " + str(msaved) + " messages saved")
 	print("ignored: " + str(mjunk) + " spam, " + str(mchat) + " mchat")
 	print("File originally contained " + str(sourcembox.__len__()) + " messages to process")
 
+def get_email_list(message):
+	email_payload = message.get_payload()
+	if message.is_multipart():
+		email_messages = list(_get_email_messages(email_payload))
+	else:
+		email_messages = [email_payload]
+	return email_messages
+
+def _get_email_messages(email_payload):
+	for msg in email_payload:
+		if isinstance(msg, (list,tuple)):
+			for submsg in _get_email_messages(msg):
+				yield submsg
+		elif msg.is_multipart():
+			for submsg in _get_email_messages(msg.get_payload()):
+				yield submsg
+		else:
+			yield msg
+
+def print_dict(obj):
+	for k,v in obj.items():
+		print(f"{k}: {v}")
+
+def _read_email_text(msg):
+	content_type = 'NA' if isinstance(msg, str) else msg.get_content_type()
+	encoding = 'NA' if isinstance(msg, str) else msg.get('Content-Transfer-Encoding', 'NA')
+	if 'text/plain' in content_type and 'base64' not in encoding:
+		msg_text = msg.get_payload()
+	# elif 'text/html' in content_type and 'base64' not in encoding:
+	#     msg_text = get_html_text(msg.get_payload())
+	# elif content_type == 'NA':
+	#     msg_text = get_html_text(msg)
+	else:
+		msg_text = None
+	return (content_type, encoding, msg_text)
+
 if __name__ == "__main__":
-    main(sys.argv[1:])
+	main(sys.argv[1:])
