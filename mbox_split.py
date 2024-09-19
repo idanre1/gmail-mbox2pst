@@ -144,12 +144,19 @@ def main(argv):
 			issues=False
 			for msg in email_messages:
 				m=message_encoding_fix(msg)
-				try:
-					boxes[tbox].add(m)
-				except:
-					issues=True
+				# Partial additions
+				# try:
+				# 	boxes[tbox].add(m)
+				# except:
+				# 	issues=True
 					# print('Error adding message')
 					# print(f"Message: {msg}")
+
+			# Add message after in-memory charset adjustments
+			try:
+				boxes[tbox].add(message)
+			except:
+				issues=True
 			if issues:
 				missues += 1
 				msaved -= 1
@@ -197,19 +204,18 @@ def message_encoding_fix(msg):
 	content_type = 'NA' if isinstance(msg, str) else msg.get_content_type()
 	encoding = 'NA' if isinstance(msg, str) else msg.get('Content-Transfer-Encoding', 'NA')
 	# print(f'{i} - {content_type} - {encoding}')
-	if 'text/plain' in content_type and 'base64' not in encoding:
+	fixable_content = ['text/plain', 'multipart/alternative', 'multipart/mixed']
+	fixable = ab_intersected(fixable_content,[content_type]) and 'base64' not in encoding
+	print(fixable, content_type, encoding)
+	# print(msg)
+	if fixable:
+		# print(content_type, encoding)
 		try:
+			# Infer payload charset from Subject charset
 			hdr=decode_header(msg['Subject'])
 			charset=hdr[0][1]
 			msg.set_charset(charset)
-		except:
-			# print('Error transfering header')
-			pass
-	elif 'multipart/alternative' in content_type and 'base64' not in encoding:
-		try:
-			hdr=decode_header(msg['Subject'])
-			charset=hdr[0][1]
-			msg.set_charset(charset)
+			print(msg)
 		except:
 			# print('Error transfering header')
 			pass
