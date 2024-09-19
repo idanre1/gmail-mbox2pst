@@ -206,16 +206,22 @@ def message_encoding_fix(msg):
 	# print(f'{i} - {content_type} - {encoding}')
 	fixable_content = ['text/plain', 'multipart/alternative', 'multipart/mixed']
 	fixable = ab_intersected(fixable_content,[content_type]) and 'base64' not in encoding
-	print(fixable, content_type, encoding)
-	# print(msg)
+	#print(fixable, content_type, encoding)
+	#print(msg)
 	if fixable:
 		# print(content_type, encoding)
 		try:
 			# Infer payload charset from Subject charset
 			hdr=decode_header(msg['Subject'])
 			charset=hdr[0][1]
+			if charset is None:
+				hdr=decode_header(msg['From'])
+				charset=hdr[0][1]
+				if charset is None:
+					hdr=decode_header(msg['To'])
+					charset=hdr[0][1]
 			msg.set_charset(charset)
-			print(msg)
+			#print(msg)
 		except:
 			# print('Error transfering header')
 			pass
