@@ -8,6 +8,20 @@ import getopt
 import mailbox
 from email.header import decode_header, make_header
 
+# Multilanguage support for labels
+inbox_labels = ["Inbox","תיבת דואר נכנס", "קטגוריה – אישי"]
+sent_labels = ["Sent","דואר יוצא"]
+archive_labels = ["Archive","מאוחסן בארכיון","[Imap]/Archive"]
+spam_labels = ["Spam"]
+chat_labels = ["Chat"]
+trash_labels = ["Trash","אשפה"]
+unread_labels = ["Unread","לא נקרא"]
+opened_labels = ["Opened","נפתח"]
+important_labels = ["Important","חשוב"]
+starred_labels = ["Starred"]
+newsletters_labels = ["Newsletters"]
+categorized_labels = ["קטגוריה – עדכונים", "קטגוריה – קידומי מכירות","קטגוריה – רשתות חברתיות"] # TODO find english names
+
 def main(argv):
 	in_mbox = "source.mbox"
 	prefix = ""
@@ -39,25 +53,7 @@ def main(argv):
 	sourcembox = mailbox.mbox(in_mbox, create=False)
 	sys.stdout.flush()
 
-	mcount = mjunk = mchat = msaved = merr_hdr = merr_cont = 0
-
-	def decode(s):
-		# https://stackoverflow.com/questions/7331351/python-email-header-decoding-utf-8
-		# https://www.base64decode.org/
-		try:
-			result = str(make_header(decode_header(s)))
-		except:
-			# print("Error decoding header: " + s)
-			dh=decode_header(s)
-			# print("Decode: " + str(dh))
-			l=[]
-			for hdr,enc in dh:
-				if (enc == 'iso-8859-8-i'):
-					enc='iso-8859-8'
-				l.append((hdr,enc))
-			h=make_header(l)
-			# print("Make header:" + str(h))
-		return result
+	mcount = mjunk = mchat = msaved = missues = merr_cont = 0
 
 	print("Looping:")
 	labels={}
@@ -66,63 +62,51 @@ def main(argv):
 		flagged = False
 		mcount += 1
 		gmail_labels = message["X-Gmail-Labels"]
-		tbox = "Archive"				# default target box: Archive
 
+		tbox = "Archive" # default target box: Archive
 		if gmail_labels:
 			gmail_labels = decode(gmail_labels)
 			gmail_labels = gmail_labels.split(',')	# from here we only work on an array to avoid partial matches
 			# handle flags
-			if "Unread" in gmail_labels:
+			if ab_intersected(unread_labels,gmail_labels):
 				read = False
-			if "לא נקרא" in gmail_labels:
-				read = False
-			if "נפתח" in gmail_labels:
+			if ab_intersected(opened_labels,gmail_labels):
 				read = True
-			if "Starred" in gmail_labels:
+			if ab_intersected(starred_labels,gmail_labels):
 				flagged = True
 
 			# order matters!
-			if "Spam" in gmail_labels:
+			if ab_intersected(spam_labels,gmail_labels):
 				mjunk += 1
 				tbox = "Spam"
-			elif "Chat" in gmail_labels:
+			elif ab_intersected(chat_labels,gmail_labels):
 				mchat += 1
 				tbox = "Chat"
-			elif "Trash" in gmail_labels:
+			elif ab_intersected(trash_labels,gmail_labels):
 				tbox = "Trash"
-			elif "אשפה" in gmail_labels:
-				tbox = "Trash"
-			elif "Sent" in gmail_labels:		# anything that has Sent goes to Sent box
+			elif ab_intersected(sent_labels,gmail_labels):
 				tbox = "Sent"
-			elif "דואר יוצא" in gmail_labels:	# anything that has Sent goes to Sent box
-				tbox = "Sent"
-			elif "Inbox" in gmail_labels:		# Inbox treated here because some messages can be Sent,Inbox
-				tbox = "Inbox"
-			elif "תיבת דואר נכנס" in gmail_labels:		# Inbox treated here because some messages can be Sent,Inbox
-				tbox = "Inbox"
-			elif "קטגוריה – אישי" in gmail_labels:		# Inbox treated here because some messages can be Sent,Inbox
-				tbox = "Inbox"
 			else:
-				for label_ in gmail_labels:
-					label=label_.replace('/','__') # Handle sublabels in gmail
-					# ignore meta labels
-					if label in ["Important","Unread","Starred","Newsletters"]:
-						continue
-					if label in ["חשוב","לא נקרא","נפתח","קטגוריה – עדכונים", "קטגוריה – קידומי מכירות","קטגוריה – רשתות חברתיות"]:
-						continue
+				meta_labels = unions([inbox_labels,archive_labels,important_labels,starred_labels,newsletters_labels,categorized_labels,unread_labels, opened_labels])
+				custome_labels = list(set(gmail_labels) - set(meta_labels))
 
-					# use last match (no break on loop)
-					tbox = label
+				if (len(custome_labels) > 0):
+					# Custome labels
+					label_ = custome_labels[0] # use first match
+					label=label_.replace('/','__') # Handle sublabels in gmail
 					if label not in labels:
 						labels[label] = 1
 					else:
 						labels[label] += 1
+					# Assign the label
+					tbox = label
 
-					# handle odd labels
-					if label == "[Imap]/Archive":
-						tbox = "Archive"
-					elif label == "מאוחסן בארכיון":
-						tbox = "Archive"
+				elif ab_intersected(inbox_labels,gmail_labels):
+					# Inbox treated here because some messages can be Sent,Inbox
+					tbox = "Inbox"
+				elif ab_intersected(archive_labels,gmail_labels):
+					# Archive is last priority
+					tbox = "Archive"
 				
 				# if nothing matched we'll use default set at message loop start
 
@@ -134,13 +118,13 @@ def main(argv):
 		if flagged:
 			message["X-Status"] = "F"
 
-		try:
-			mfrom = decode(message["From"]) or "Unknown"
-		except:
-			# print("Error decoding From: " + message["From"])
-			merr_hdr += 1
-			mfrom = "Unknown"
-		mid = message["Message-Id"] or "<N/A>"
+		# try:
+		# 	mfrom = decode(message["From"]) or "Unknown"
+		# except:
+		# 	print("Error decoding From: " + message["From"])
+		# 	merr_hdr += 1
+		# 	mfrom = "Unknown"
+		# mid = message["Message-Id"] or "<N/A>"
 		# print("Storing " + mid + " from \"" + mfrom + "\" to mbox \"" + tbox + "\"")
 		msaved += 1
 
@@ -157,38 +141,79 @@ def main(argv):
 			merr_cont += 1
 
 			email_messages = get_email_list(message)
-			for i, msg in enumerate(email_messages):
-				content_type = 'NA' if isinstance(msg, str) else msg.get_content_type()
-				encoding = 'NA' if isinstance(msg, str) else msg.get('Content-Transfer-Encoding', 'NA')
-				# print(f'{i} - {content_type} - {encoding}')
-				if 'text/plain' in content_type and 'base64' not in encoding:
-					try:
-						hdr=decode_header(msg['Subject'])
-						enc=hdr[0][1]
-						msg.set_charset(enc)
-					except:
-						# print('Error transfering header')
-						pass
-				elif 'multipart/alternative' in content_type and 'base64' not in encoding:
-					try:
-						hdr=decode_header(msg['Subject'])
-						enc=hdr[0][1]
-						msg.set_charset(enc)
-					except:
-						# print('Error transfering header')
-						pass
+			issues=False
+			for msg in email_messages:
+				m=message_encoding_fix(msg)
 				try:
-					boxes[tbox].add(msg)
+					boxes[tbox].add(m)
 				except:
-					pass
+					issues=True
 					# print('Error adding message')
 					# print(f"Message: {msg}")
+			if issues:
+				missues += 1
+				msaved -= 1
 
 	print(str(mcount) + " messages processed, " + str(msaved) + " messages saved")
-	print("ignored: " + str(merr_hdr) + " hdr encoding errors, " + str(merr_cont) + " content encoding error")
+	print("Content encoding errors: " + str(merr_cont) + " skipped (even partially): " + str(missues))
 	print("File originally contained " + str(sourcembox.__len__()) + " messages to process")
 	print("Found " + str(len(labels)) + " unique labels")
 	print_dict(labels)
+
+# Helper functions
+def decode(s):
+	# https://stackoverflow.com/questions/7331351/python-email-header-decoding-utf-8
+	# https://www.base64decode.org/
+	try:
+		result = str(make_header(decode_header(s)))
+	except:
+		# print("Error decoding header: " + s)
+		dh=decode_header(s)
+		# print("Decode: " + str(dh))
+		l=[]
+		for hdr,enc in dh:
+			# https://stackoverflow.com/questions/77686819/decode-bi-directional-bytes-e-g-iso-8859-8-i-and-iso-8859-8-e-in-python
+			# Python lacks support of all ECMA escape characters, shifts, etc
+			if (enc == 'iso-8859-8-i'):
+				enc='iso-8859-8'
+			l.append((hdr,enc))
+		result=str(make_header(l))
+		# print("Make header:" + str(h))
+	return result
+
+def ab_intersected(a,b):
+	'''
+	Check if two lists have any common elements
+	'''
+	return not set(a).isdisjoint(b)
+
+def unions(l):
+	'''
+	Union of multiple lists
+	'''
+	return list(set().union(*l))
+
+def message_encoding_fix(msg):
+	content_type = 'NA' if isinstance(msg, str) else msg.get_content_type()
+	encoding = 'NA' if isinstance(msg, str) else msg.get('Content-Transfer-Encoding', 'NA')
+	# print(f'{i} - {content_type} - {encoding}')
+	if 'text/plain' in content_type and 'base64' not in encoding:
+		try:
+			hdr=decode_header(msg['Subject'])
+			charset=hdr[0][1]
+			msg.set_charset(charset)
+		except:
+			# print('Error transfering header')
+			pass
+	elif 'multipart/alternative' in content_type and 'base64' not in encoding:
+		try:
+			hdr=decode_header(msg['Subject'])
+			charset=hdr[0][1]
+			msg.set_charset(charset)
+		except:
+			# print('Error transfering header')
+			pass
+	return msg
 
 def get_email_list(message):
 	email_payload = message.get_payload()
