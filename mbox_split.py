@@ -39,7 +39,7 @@ def main(argv):
 	sourcembox = mailbox.mbox(in_mbox, create=False)
 	sys.stdout.flush()
 
-	mcount = mjunk = mchat = msaved = 0
+	mcount = mjunk = mchat = msaved = merr_hdr = merr_cont = 0
 
 	def decode(s):
 		# https://stackoverflow.com/questions/7331351/python-email-header-decoding-utf-8
@@ -60,6 +60,7 @@ def main(argv):
 		return result
 
 	print("Looping:")
+	labels={}
 	for message in sourcembox:
 		read = True
 		flagged = False
@@ -102,22 +103,27 @@ def main(argv):
 			elif "קטגוריה – אישי" in gmail_labels:		# Inbox treated here because some messages can be Sent,Inbox
 				tbox = "Inbox"
 			else:
-				for label in gmail_labels:
+				for label_ in gmail_labels:
+					label=label_.replace('/','__') # Handle sublabels in gmail
 					# ignore meta labels
 					if label in ["Important","Unread","Starred","Newsletters"]:
 						continue
 					if label in ["חשוב","לא נקרא","נפתח","קטגוריה – עדכונים", "קטגוריה – קידומי מכירות","קטגוריה – רשתות חברתיות"]:
 						continue
 
-					# use first match
+					# use last match (no break on loop)
 					tbox = label
+					if label not in labels:
+						labels[label] = 1
+					else:
+						labels[label] += 1
 
 					# handle odd labels
 					if label == "[Imap]/Archive":
 						tbox = "Archive"
 					elif label == "מאוחסן בארכיון":
 						tbox = "Archive"
-					break
+				
 				# if nothing matched we'll use default set at message loop start
 
 		# fixup missing status flags in the message
@@ -131,7 +137,8 @@ def main(argv):
 		try:
 			mfrom = decode(message["From"]) or "Unknown"
 		except:
-			print("Error decoding From: " + message["From"])
+			# print("Error decoding From: " + message["From"])
+			merr_hdr += 1
 			mfrom = "Unknown"
 		mid = message["Message-Id"] or "<N/A>"
 		# print("Storing " + mid + " from \"" + mfrom + "\" to mbox \"" + tbox + "\"")
@@ -143,39 +150,45 @@ def main(argv):
 		try:
 			boxes[tbox].add(message)
 		except UnicodeEncodeError:
-			print("Error adding message to mbox: " + tbox)
-			print(f"Message: {message}")
-			print("From: " + mfrom)
-			print("Message ID: " + mid)
+			# print("Error adding message to mbox: " + tbox)
+			# print(f"Message: {message}")
+			# print("From: " + mfrom)
+			# print("Message ID: " + mid)
+			merr_cont += 1
 
 			email_messages = get_email_list(message)
 			for i, msg in enumerate(email_messages):
 				content_type = 'NA' if isinstance(msg, str) else msg.get_content_type()
 				encoding = 'NA' if isinstance(msg, str) else msg.get('Content-Transfer-Encoding', 'NA')
-				print(f'{i} - {content_type} - {encoding}')
+				# print(f'{i} - {content_type} - {encoding}')
 				if 'text/plain' in content_type and 'base64' not in encoding:
 					try:
 						hdr=decode_header(msg['Subject'])
 						enc=hdr[0][1]
 						msg.set_charset(enc)
 					except:
-						print('Error transfering header')
+						# print('Error transfering header')
+						pass
 				elif 'multipart/alternative' in content_type and 'base64' not in encoding:
 					try:
 						hdr=decode_header(msg['Subject'])
 						enc=hdr[0][1]
 						msg.set_charset(enc)
 					except:
-						print('Error transfering header')
+						# print('Error transfering header')
+						pass
 				try:
 					boxes[tbox].add(msg)
 				except:
-					print('Error adding message')
-					print(f"Message: {msg}")
+					pass
+					# print('Error adding message')
+					# print(f"Message: {msg}")
 
 	print(str(mcount) + " messages processed, " + str(msaved) + " messages saved")
-	print("ignored: " + str(mjunk) + " spam, " + str(mchat) + " mchat")
+	print("ignored: " + str(merr_hdr) + " hdr encoding errors, " + str(merr_cont) + " content encoding error")
 	print("File originally contained " + str(sourcembox.__len__()) + " messages to process")
+	print("Found " + str(len(labels)) + " unique labels")
+	print_dict(labels)
 
 def get_email_list(message):
 	email_payload = message.get_payload()
