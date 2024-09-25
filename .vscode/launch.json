@@ -12,7 +12,7 @@
             "console": "integratedTerminal",
             "cwd": "/nas/mail",
             "args": [
-                "--infile","/var/mail/${env:USER}","--prefix", ""
+                "--infile","/var/mail/${env:USER}"
             ]
         }
     ]

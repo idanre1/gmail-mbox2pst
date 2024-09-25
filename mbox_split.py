@@ -24,30 +24,27 @@ categorized_labels = ["קטגוריה – עדכונים", "קטגוריה – �
 
 def main(argv):
 	in_mbox = "source.mbox"
-	prefix = ""
 	try:
-		opts, args = getopt.getopt(argv, "i:p:", ["infile=", "prefix="])
+		opts, args = getopt.getopt(argv, "i:", ["infile="])
 	except getopt.GetoptError:
-		print("python splitgmail.py -i <infile> -p <prefix>")
+		print("python mbox_split.py -i <infile>")
 		sys.exit(2)
 
 	for opt, arg in opts:
 		if opt in ("-i", "--infile"):
 			in_mbox = arg
-		elif opt in ("-p", "--prefix"):
-			prefix = arg
 
-	print("Processing file \"" + in_mbox + "\", output prefix \"" + prefix + "\"")
+	print(f'Processing file "{in_mbox}"')
 	sys.stdout.flush()
 
 	# Create common mailboxes
 	boxes = {
-		"Inbox":	mailbox.mbox(prefix + "INBOX", create=True),
-		"Sent":		mailbox.mbox(prefix + "Sent", create=True),
-		"Archive":	mailbox.mbox(prefix + "Archive", create=True),
-		"Spam":	mailbox.mbox(prefix + "Spam", create=True),
-		"Chat":	mailbox.mbox(prefix + "Chat", create=True),
-		"Trash":	mailbox.mbox(prefix + "Trash", create=True),
+		"Inbox":	create_mbox("INBOX"),
+		"Sent":		create_mbox("Sent"),
+		"Archive":	create_mbox("Archive"),
+		"Spam":	    create_mbox("Spam"),
+		"Chat":	    create_mbox("Chat"),
+		"Trash":	create_mbox("Trash"),
 	}
 
 	sourcembox = mailbox.mbox(in_mbox, create=False)
@@ -92,8 +89,8 @@ def main(argv):
 
 				if (len(custome_labels) > 0):
 					# Custome labels
-					label_ = custome_labels[0] # use first match
-					label=label_.replace('/','__') # Handle sublabels in gmail
+					label = custome_labels[0] # use first match
+					# label=label_.replace('/','__') # Handle sublabels in gmail
 					if label not in labels:
 						labels[label] = 1
 					else:
@@ -129,7 +126,7 @@ def main(argv):
 		msaved += 1
 
 		if tbox not in boxes:
-			boxes[tbox] = mailbox.mbox(prefix + tbox, create=True)
+			boxes[tbox] = create_mbox(tbox)
 		# https://stackoverflow.com/questions/409217/python-mailbox-encoding-errors
 		try:
 			boxes[tbox].add(message)
@@ -168,6 +165,17 @@ def main(argv):
 	print_dict(labels)
 
 # Helper functions
+def create_mbox(name_, raw=False):
+	if not raw:
+		# label needs to be a folder
+		name = f'.{name_}'
+		name = name.replace('/','.')
+	else:
+		name = name_
+	print(f"Creating mbox: {name}")
+	box = mailbox.mbox(name, create=True)
+	return box
+
 def decode(s):
 	# https://stackoverflow.com/questions/7331351/python-email-header-decoding-utf-8
 	# https://www.base64decode.org/
