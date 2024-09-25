@@ -168,8 +168,10 @@ def main(argv):
 def create_mbox(name_, raw=False):
 	if not raw:
 		# label needs to be a folder
-		name = f'.{name_}'
-		name = name.replace('/','.')
+		name = name_.replace('.','_') # path seperator converter
+		name = name_.replace('/ ','/') # labal cannot start with space
+		name = f'.{name}' # prefix as maildir++ format
+		name = name.replace('/','.') # child folders
 	else:
 		name = name_
 	print(f"Creating mbox: {name}")

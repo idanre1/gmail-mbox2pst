@@ -24,6 +24,12 @@ Please put inputfile on other path
 - Run it Before configuring outlook
 # Convert
 ```
+# Start dovecot
 sudo systemctl start dovecot
+# subscribe all subfolders to IMAP
+doveadm mailbox subscribe -u $USER $( doveadm mailbox list -u $USER )
 ```
 Control Panel -> Mail -> Configure IMAP on 127.0.0.1
+# Uninstall
+sudo systemctl stop dovecot
+rm ~/mail/*

@@ -4,5 +4,6 @@ sudo apt install dovecot-imapd dovecot-pop3d
 sudo systemctl disable dovecot
 sudo systemctl stop dovecot
 # https://doc.dovecot.org/2.3/configuration_manual/mail_location/mbox/
-sudo sh -c "echo 'mail_location = mbox:~/mail' >> /etc/dovecot/dovecot.conf"
+# https://doc.dovecot.org/2.3/configuration_manual/mail_location/mbox/mboxchildfolders/
+sudo sh -c "echo 'mail_location = mbox:~/mail:LAYOUT=maildir++:INDEX=~/mail/index:CONTROL=~/mail/control' >> /etc/dovecot/dovecot.conf"
 mkdir -p ~/mail
