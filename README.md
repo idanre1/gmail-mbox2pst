@@ -23,13 +23,18 @@ Please put inputfile on other path
 - Configure other IMAP port for prevent collision with dovecot
 - Run it Before configuring outlook
 # Convert
+### Service dovecot under WSL
 ```
 # Start dovecot
 sudo systemctl start dovecot
 # subscribe all subfolders to IMAP
-doveadm mailbox subscribe -u $USER $( doveadm mailbox list -u $USER )
+python subscribe.py ~/mail
 ```
-Control Panel -> Mail -> Configure IMAP on 127.0.0.1
+### Register dovecot in outlook
+- Control Panel -> Mail -> Configure IMAP on 127.0.0.1
+- Open outlook and make coffee
 # Uninstall
+```sh
 sudo systemctl stop dovecot
 rm ~/mail/*
+```
