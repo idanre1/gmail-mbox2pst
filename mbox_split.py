@@ -7,11 +7,12 @@ import sys
 import getopt
 import mailbox
 from email.header import decode_header, make_header
+import re
 
 # Multilanguage support for labels
-inbox_labels = ["Inbox","תיבת דואר נכנס", "קטגוריה – אישי"]
+inbox_labels = ["Inbox","תיבת דואר נכנס", "קטגוריה – אישי","Category Personal"]
 sent_labels = ["Sent","דואר יוצא"]
-archive_labels = ["Archive","מאוחסן בארכיון","[Imap]/Archive"]
+archive_labels = ["Archive","מאוחסן בארכיון","[Imap]/Archive", "Archived"]
 spam_labels = ["Spam"]
 chat_labels = ["Chat"]
 trash_labels = ["Trash","אשפה"]
@@ -64,6 +65,7 @@ def main(argv):
 		if gmail_labels:
 			gmail_labels = decode(gmail_labels)
 			gmail_labels = gmail_labels.split(',')	# from here we only work on an array to avoid partial matches
+			gmail_labels = [safe_mbox_name(x) for x in gmail_labels]
 			# handle flags
 			if ab_intersected(unread_labels,gmail_labels):
 				read = False
@@ -165,15 +167,23 @@ def main(argv):
 	print_dict(labels)
 
 # Helper functions
-def create_mbox(name_, raw=False):
-	if not raw:
-		# label needs to be a folder
-		name = name_.replace('.','_') # path seperator converter
-		name = name_.replace('/ ','/') # labal cannot start with space
-		name = f'.{name}' # prefix as maildir++ format
-		name = name.replace('/','.') # child folders
-	else:
-		name = name_
+def safe_mbox_name(name):
+	# safe filters
+	name = name.replace('"','') # quotes are evil !
+	name = name.replace("'",'') # quotes are evil !
+	name = name.replace("\n",'') # escape chars
+	name = name.replace("\r",'') # escape chars
+	name = name.replace("\t",'_') # escape chars
+	# folder seperator conversion
+	name = re.sub(r'/\s+', '/', name) # child folder cannot start with space, dovecot don't like it
+	name = name.replace('.','_') # folder seperator is reserved
+	name = name.replace('/','.') # apply folder seperator
+
+	return name
+
+def create_mbox(name):
+	name = f'.{name}' # prefix as maildir++ format
+	# Operate
 	print(f"Creating mbox: {name}")
 	box = mailbox.mbox(name, create=True)
 	return box
